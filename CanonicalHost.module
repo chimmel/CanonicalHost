@@ -1,0 +1,80 @@
+<?php
+
+/**
+ * Caonical Host module for ProcessWire
+ * 
+ * Redirects all requests to hostname=$config->httpHosts[0] & https
+ *
+ * ProcessWire 3.x
+ * Copyright (C) 2016 by Ryan Cramer
+ * Licensed under GNU/GPL v2, see LICENSE.TXT
+ *
+ * http://www.processwire.com
+ *
+ */
+
+class CanonicalHost extends WireData implements Module, ConfigurableModule {
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Canonical Host',
+			'summary' => 'Redirects all requests to hostname=$config->httpHosts[0] (e.g., www.domain.tld rather than domain.tld) & https',
+			'version' => 001,
+			'singular' => true,
+			'autoload' => true,
+		);
+	}
+
+    /** 
+     * Instantiate redirect
+     * 
+     * TODO:
+     * - make https optional
+     */
+    public function init() {
+        // if (php_sapi_name() == 'cli') return;
+        $redirect = false;
+        $relocate = wire('input')->httpsUrl(['withQueryString' => true]); // https
+        $hostname = wire('config')->httpHost;
+        if (!isset(($_SERVER['HTTPS']))) {
+            $redirect = true;
+        }
+        $canonical = wire('config')->httpHosts[0];
+        if ($hostname !== $canonical) {
+            $redirect = true;
+            $relocate = preg_replace("/({$hostname})/i", $canonical, $relocate, 1);
+        }
+        if ($redirect) wire('session')->redirect($relocate);
+    }
+
+	/**
+	 * Module overview/configuration
+     * - list httpHosts
+     * - https?
+	 */
+	public static function getModuleConfigInputfields(array $data) {
+		$inputfields = new InputfieldWrapper();
+
+    // List httpHosts
+    $listmarkup = '';
+    foreach (wire('config')->httpHosts as $i) {
+        $listmarkup .= '<li>'.$i.'</li>';
+    }
+    $listmarkup = '<ol>'.$listmarkup.'</ol>';
+		$f = wire('modules')->get('InputfieldMarkup'); 
+		$f->attr('name', 'hosts'); 
+		$f->label = 'config httpHosts';
+    $f->value = $listmarkup;
+		$f->description = 'Present values';
+		$f->notes = "Redirects to 1st";
+		$inputfields->add($f);
+    /*
+    // Enforce HTTPS?
+		$f = wire('modules')->get('InputfieldCheckbox'); 
+		$f->attr('name', 'https');
+		$f->label = 'Use HTTPS';
+		if (@$data['https'] == 1) $f->attr('checked', $data['https']);
+		$inputfields->add($f);*/
+
+		return $inputfields;
+	}
+}
