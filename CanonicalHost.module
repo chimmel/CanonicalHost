@@ -3,7 +3,7 @@
 /**
  * Caonical Host module for ProcessWire
  * 
- * Redirects all requests to hostname=$config->httpHosts[0] & https
+ * Redirects all requests to hostname=$config->httpHosts[0] & optionally https
  *
  * ProcessWire 3.x
  * Copyright (C) 2016 by Ryan Cramer
@@ -17,25 +17,38 @@ class CanonicalHost extends WireData implements Module, ConfigurableModule {
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'Canonical Host',
-			'summary' => 'Redirects all requests to hostname=$config->httpHosts[0] (e.g., www.domain.tld rather than domain.tld) & https',
+			'summary' => 'Redirects all requests to hostname=$config->httpHosts[0] (e.g., www.domain.tld rather than domain.tld) & optionally https',
 			'version' => 001,
 			'singular' => true,
 			'autoload' => true,
 		);
 	}
 
+	public function __construct() {
+		if(!isset($this->data['https'])) $this->data['https'] = 0;
+	}
+
     /** 
-     * Instantiate redirect
+     * Redirect if not canonical (1st specified) of httpHosts 
+	 * or if HTTPS is set in config and not present URL scheme
      * 
-     * TODO:
-     * - make https optional
      */
     public function init() {
         // if (php_sapi_name() == 'cli') return;
+        $https = $this->data['https'] == 1 ? true : false;
+		$url = $https ? 'httpsUrl' : 'httpUrl';
         $redirect = false;
-        $relocate = wire('input')->httpsUrl(['withQueryString' => true]); // https
+        $relocate = wire('input')->$url([
+          'withQueryString' => true, 
+        //   'scheme' => $https ? 'https' : 'http'
+        ]);/*
+		// var_dump(wire('input')->scheme());
+		// var_dump($this->data['https']);
+		// var_dump($https);
+		// echo $relocate;
+		*/
         $hostname = wire('config')->httpHost;
-        if (!isset(($_SERVER['HTTPS']))) {
+        if ($https && !isset(($_SERVER['HTTPS']))) {
             $redirect = true;
         }
         $canonical = wire('config')->httpHosts[0];
@@ -49,31 +62,31 @@ class CanonicalHost extends WireData implements Module, ConfigurableModule {
 	/**
 	 * Module overview/configuration
      * - list httpHosts
-     * - https?
+     * - sitewide https?
 	 */
 	public static function getModuleConfigInputfields(array $data) {
 		$inputfields = new InputfieldWrapper();
 
-    // List httpHosts
-    $listmarkup = '';
-    foreach (wire('config')->httpHosts as $i) {
-        $listmarkup .= '<li>'.$i.'</li>';
-    }
-    $listmarkup = '<ol>'.$listmarkup.'</ol>';
+		// List httpHosts
+		$listmarkup = '';
+		foreach (wire('config')->httpHosts as $i) {
+			$listmarkup .= '<li>'.$i.'</li>';
+		}
+		$listmarkup = '<ol>'.$listmarkup.'</ol>';
 		$f = wire('modules')->get('InputfieldMarkup'); 
 		$f->attr('name', 'hosts'); 
 		$f->label = 'config httpHosts';
-    $f->value = $listmarkup;
+		$f->value = $listmarkup;
 		$f->description = 'Present values';
 		$f->notes = "Redirects to 1st";
 		$inputfields->add($f);
-    /*
-    // Enforce HTTPS?
+    
+		// Enforce HTTPS?
 		$f = wire('modules')->get('InputfieldCheckbox'); 
 		$f->attr('name', 'https');
 		$f->label = 'Use HTTPS';
 		if (@$data['https'] == 1) $f->attr('checked', $data['https']);
-		$inputfields->add($f);*/
+		$inputfields->add($f);
 
 		return $inputfields;
 	}
