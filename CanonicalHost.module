@@ -28,6 +28,16 @@ class CanonicalHost extends WireData implements Module, ConfigurableModule {
 		if(!isset($this->data['https'])) $this->data['https'] = 0;
 	}
 
+	/** 
+	 * Get constructed homepage URL
+	 * @return string
+	 */
+	public static function baseUrl() {
+		$https = modules()->getConfig(__CLASS__, 'https');
+		$schema = $https ? 'https' : 'http';
+		return $schema.'://'.config()->httpHosts[0];
+	}
+
     /** 
      * Redirect if not canonical (1st specified) of httpHosts 
 	 * or if HTTPS is set in config and not present URL scheme
