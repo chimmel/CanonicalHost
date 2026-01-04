@@ -17,7 +17,7 @@ class CanonicalHost extends WireData implements Module, ConfigurableModule {
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'Canonical Host',
-			'summary' => 'Redirects all requests to hostname=$config->httpHosts[0] (e.g., www.domain.tld rather than domain.tld) & optionally https',
+			'summary' => 'Redirects all requests to hostname=$config->httpHosts[0] (e.g., www.domain.tld rather than domain.tld) & optionally https (or allows ngrok/proxy)',
 			'version' => 001,
 			'singular' => true,
 			'autoload' => true,
@@ -41,9 +41,11 @@ class CanonicalHost extends WireData implements Module, ConfigurableModule {
     /** 
      * Redirect if not canonical (1st specified) of httpHosts 
 	 * or if HTTPS is set in config and not present URL scheme
+	 * unless served by proxy (e.g., ngrok)
      * 
      */
     public function init() {
+		if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) return;
         // if (php_sapi_name() == 'cli') return;
         $https = $this->data['https'] == 1 ? true : false;
 		$url = $https ? 'httpsUrl' : 'httpUrl';
