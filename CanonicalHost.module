@@ -2,8 +2,8 @@
 
 /**
  * Caonical Host module for ProcessWire
- * 
- * Redirects all requests to hostname=$config->httpHosts[0] & optionally https
+ *
+ * Options to redirect all requests to hostname=$config->httpHosts[0] & https, respectively
  *
  * ProcessWire 3.x
  * Copyright (C) 2016 by Ryan Cramer
@@ -17,7 +17,7 @@ class CanonicalHost extends WireData implements Module, ConfigurableModule {
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'Canonical Host',
-			'summary' => 'Redirects all requests to hostname=$config->httpHosts[0] (e.g., www.domain.tld rather than domain.tld) & optionally https (or allows ngrok/proxy)',
+			'summary' => 'Options to redirect all requests to hostname=$config->httpHosts[0] (e.g., www.domain.tld rather than domain.tld) & https, respectively',
 			'version' => 001,
 			'singular' => true,
 			'autoload' => true,
@@ -26,54 +26,48 @@ class CanonicalHost extends WireData implements Module, ConfigurableModule {
 
 	public function __construct() {
 		if(!isset($this->data['https'])) $this->data['https'] = 0;
+		if(!isset($this->data['restrict_host'])) $this->data['restrict_host'] = 0;
 	}
 
-	/** 
-	 * Get constructed homepage URL
-	 * @return string
-	 */
-	public static function baseUrl() {
-		$https = modules()->getConfig(__CLASS__, 'https');
-		$schema = $https ? 'https' : 'http';
-		return $schema.'://'.config()->httpHosts[0];
-	}
-
-    /** 
-     * Redirect if not canonical (1st specified) of httpHosts 
-	 * or if HTTPS is set in config and not present URL scheme
-	 * unless served by proxy (e.g., ngrok)
-     * 
+    /**
+	 * Set sitewide https if enabled.
+	 * Redirect to httpHosts[0] if enabled.
+     *
      */
     public function init() {
-		if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) return;
+		if ($this->data['https'] == 1)
+		foreach (wire('templates') as $tpl) $tpl->https = 1;
+
+		// if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) return; // does in ddev
         // if (php_sapi_name() == 'cli') return;
-        $https = $this->data['https'] == 1 ? true : false;
-		$url = $https ? 'httpsUrl' : 'httpUrl';
-        $redirect = false;
-        $relocate = wire('input')->$url([
-          'withQueryString' => true, 
-        //   'scheme' => $https ? 'https' : 'http'
-        ]);/*
-		// var_dump(wire('input')->scheme());
-		// var_dump($this->data['https']);
-		// var_dump($https);
-		// echo $relocate;
-		*/
-        $hostname = wire('config')->httpHost;
-        if ($https && !isset(($_SERVER['HTTPS']))) {
-            $redirect = true;
-        }
-        $canonical = wire('config')->httpHosts[0];
-        if ($hostname !== $canonical) {
-            $redirect = true;
-            $relocate = preg_replace("/({$hostname})/i", $canonical, $relocate, 1);
-        }
-        if ($redirect) wire('session')->redirect($relocate);
+
+		if ($this->data['restrict_host'] == 1 && wire('config')->httpHosts[0] !== wire('config')->httpHost) {
+			$this->redirect();
+		}
     }
+
+    /**
+     * Redirect if not 1st of httpHosts
+     *
+     */
+	public function redirect() {
+		$url = $this->data['https'] ? 'httpsUrl' : 'httpUrl';
+
+        $relocate = wire('input')->$url([
+          'withQueryString' => true,
+        ]);
+
+		$hostname = wire('config')->httpHost;
+		$canonical = wire('config')->httpHosts[0];
+
+		$relocate = preg_replace("/({$hostname})/i", $canonical, $relocate, 1);
+
+		wire('session')->redirect($relocate);
+	}
 
 	/**
 	 * Module overview/configuration
-     * - list httpHosts
+	 * - list httpHosts -- restrict to 1st?
      * - sitewide https?
 	 */
 	public static function getModuleConfigInputfields(array $data) {
@@ -85,16 +79,23 @@ class CanonicalHost extends WireData implements Module, ConfigurableModule {
 			$listmarkup .= '<li>'.$i.'</li>';
 		}
 		$listmarkup = '<ol>'.$listmarkup.'</ol>';
-		$f = wire('modules')->get('InputfieldMarkup'); 
-		$f->attr('name', 'hosts'); 
+		$f = wire('modules')->get('InputfieldMarkup');
+		$f->attr('name', 'hosts');
 		$f->label = 'config httpHosts';
+		$f->notes = 'Present values';
 		$f->value = $listmarkup;
-		$f->description = 'Present values';
-		$f->notes = "Redirects to 1st";
 		$inputfields->add($f);
-    
+
+		// Restrict httpHost?
+		$f = wire('modules')->get('InputfieldCheckbox');
+		$f->attr('name', 'restrict_host');
+		$f->label = 'Restrict to httpHosts[0]';
+		$f->notes = "Redirects to 1st";
+		if (@$data['restrict_host'] == 1) $f->attr('checked', $data['restrict_host']);
+		$inputfields->add($f);
+
 		// Enforce HTTPS?
-		$f = wire('modules')->get('InputfieldCheckbox'); 
+		$f = wire('modules')->get('InputfieldCheckbox');
 		$f->attr('name', 'https');
 		$f->label = 'Use HTTPS';
 		if (@$data['https'] == 1) $f->attr('checked', $data['https']);
